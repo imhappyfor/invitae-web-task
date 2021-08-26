@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block content %}
+<head>
+
+<script src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+</head>
+<body> 
+    <header>
+        <h1>View Genome Data</h1>
+    </header>
+    <div class="loader" id="spinner"></div>
+    <div id="tab-container">
+        <!-- Nav tabs -->
+        <ul class="nav nav-tabs" role="tablist">
+            <li role="presentation" class="active"><a href="#tableTab" aria-controls="tableTab" role="tab" data-toggle="tab">Genome Data Table</a></li>
+            <li role="presentation"><a href="#dataRenderTab" aria-controls="dataRenderTab" role="tab" data-toggle="tab">Genome Box Plot</a></li>
+        </ul>
+        <!-- Tab panes -->
+        <div class="tab-content" >
+            <div role="tabpanel" class="tab-pane active" id="tableTab">
+                <div class="input-group">
+                    <span class="input-group-addon">Search</span>
+                    <input id="mySearchBar" type="text" class="form-control" name="msg" placeholder="Search by value">
+                </div>
+                    <table class="table table-bordered " id="tableData">
+                        <thead>
+                            <tr>
+                                <th>chrom</th> <th>chromStart</th> <th>chromEnd</th> <th>name</th> <th>score</th> <th>strand</th> <th>thickStart</th> <th>thickEnd</th>
+                            </tr>
+                        </thead>
+                        <tbody id='tableContents'></tbody>
+                    </table>
+            </div>  
+            <div role="tabpanel" class="tab-pane" id="dataRenderTab"> </div>
+        </div>
+    </div>
+</body>
+
+<script>
+    const getBedData = async () => {
+        // try to grab the data. 
+        let result
+        try {
+            result = await axios.get('/genome/view/data');
+        }
+        catch (e) {
+            console.log(e);
+        }
+        // else return an empty object
+        return result && result.data ? result.data : {}
+    }
+    const plotData = async (data) => {
+        const loadingSpinner = document.getElementById('spinner')
+        const tabContainer = document.getElementById('tab-container')
+        if (data.length){
+            const table = document.getElementById('tableContents')
+            let tableData = ``
+            const plotData = []
+            let recordCount = 0
+            data.forEach(el => {
+                recordCount++
+                // get element fields
+                const properties = el && el.fields
+                const plotObject = {
+                    y : [properties.chromStart, properties.chromStart],
+                    boxpoints: 'all',
+                    type: 'box'
+                }
+                plotData.push(plotObject)
+                // push data to table as well.
+                tableData += `
+                <tr>
+                    <td>${properties.chrom}</td>
+                    <td>${properties.chromStart}</td>
+                    <td>${properties.chromEnd}</td>
+                    <td>${properties.name}</td>
+                    <td>${properties.score}</td>
+                    <td>${properties.strand}</td>
+                    <td>${properties.thickStart}</td>
+                    <td>${properties.thickEnd}</td>
+                </tr>`
+            })
+            table.innerHTML = tableData
+            // because we start with the active tab being the table the width is determined on load.
+            // afterwards the responsive flag in the plotly config will take over handling the width.
+            renderWidth = document.getElementById("tableTab").offsetWidth
+            const layout = {
+                autosize: true,
+                width: renderWidth,
+                // paper_bgcolor: '#7f7f7f',
+                plot_bgcolor: 'whitesmoke'
+            }
+            const config = {responsive: true}
+            Plotly.newPlot('dataRenderTab', plotData, layout, config)
+            loadingSpinner.remove()
+        }
+        else {
+            loadingSpinner.remove()
+            tabContainer.innerHTML = '<p>No data was found in database. Please upload a bed file <a href="/genome/upload"> here </a>. </p>'
+        }
+        
+        tabContainer.style.visibility = 'visible'
+    }
+
+    const getAndPlotData = async _ => {
+        const data = await getBedData()
+        // load data if it
+        await plotData(data)
+        
+    }
+    getAndPlotData()
+    // Jquery event listener for searching through the data loaded into the table.
+    $(document).ready(function(){
+        $("#mySearchBar").on("keyup", function() {
+            var value = $(this).val().toLowerCase()
+            $("#tableContents tr").filter(function() {
+                $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+            })
+        })
+    })
+</script>
+<style>
+    #tab-container {
+        visibility: hidden;
+    }
+    .loader {
+        border: 16px solid #2f2f2f;
+        border-top: 16px solid #2bb951; 
+        border-radius: 50%;
+        width: 120px;
+        height: 120px;
+        margin: 0 auto;
+        animation: spin 2s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock content %}
